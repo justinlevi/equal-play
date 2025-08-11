@@ -6,7 +6,7 @@ import { SettingsModal } from './components/modals/SettingsModal';
 import { RosterModal } from './components/modals/RosterModal';
 import { ReportModal } from './components/modals/ReportModal';
 import { PlayerDetailsModal } from './components/modals/PlayerDetailsModal';
-import { Player, CustomStat, SubstitutionSuggestion } from './types/index';
+import { Player, CustomStat, SubstitutionSuggestion, Position } from './types/index';
 import { calculateMinutesStats } from './utils/stats';
 import { useLocalStorage } from './hooks/useLocalStorage';
 
@@ -24,6 +24,7 @@ function App() {
   const [onFieldTarget, setOnFieldTarget] = useLocalStorage('ep.onFieldTarget', 7);
   const [halfMinutes, setHalfMinutes] = useLocalStorage('ep.halfMinutes', 25);
   const [customStats, setCustomStats] = useLocalStorage('ep.customStats', DEFAULT_CUSTOM_STATS);
+  const [maxSubSuggestions, setMaxSubSuggestions] = useLocalStorage('ep.maxSubSuggestions', 5);
   
   // Players
   const [players, setPlayers] = useLocalStorage<Player[]>('ep.players', []);
@@ -156,6 +157,29 @@ function App() {
     });
   };
 
+  const addMultiplePlayersWithPositions = (playersData: Array<{name: string; positions?: Position[]}>) => {
+    setPlayers(p => {
+      // Get existing player names (normalized)
+      const existingNames = new Set(p.map(player => player.name.toLowerCase()));
+      
+      // Filter out duplicates and create new players with positions
+      const newPlayers = playersData
+        .filter(data => data.name.trim())
+        .filter(data => !existingNames.has(data.name.trim().toLowerCase())) // Skip duplicates
+        .map(data => ({
+          id: crypto.randomUUID(),
+          name: data.name.trim(),
+          number: '',
+          seconds: 0,
+          on: false,
+          stats: {},
+          positions: data.positions,
+        }));
+      
+      return [...p, ...newPlayers];
+    });
+  };
+
   const removePlayer = (id: string) => {
     setPlayers(p => p.filter(x => x.id !== id));
   };
@@ -198,6 +222,24 @@ function App() {
           ? { ...x, stats: { ...x.stats, [statId]: Math.max(0, (x.stats[statId] || 0) + delta) } }
           : x
       )
+    );
+  };
+
+  const togglePosition = (playerId: string, position: Position) => {
+    setPlayers(p =>
+      p.map(player => {
+        if (player.id !== playerId) return player;
+        
+        const currentPositions = player.positions || [];
+        const hasPosition = currentPositions.includes(position);
+        
+        return {
+          ...player,
+          positions: hasPosition
+            ? currentPositions.filter(pos => pos !== position)
+            : [...currentPositions, position]
+        };
+      })
     );
   };
 
@@ -250,18 +292,64 @@ function App() {
     if (onFieldPlayers.length === 0 || benchPlayers.length === 0) return [];
     
     const subs: SubstitutionSuggestion[] = [];
+    const usedFieldPlayers = new Set<string>();
+    const usedBenchPlayers = new Set<string>();
+    
     const fieldSorted = [...onFieldPlayers].sort((a, b) => (b.seconds || 0) - (a.seconds || 0));
     const benchSorted = [...benchPlayers].sort((a, b) => (a.seconds || 0) - (b.seconds || 0));
     
-    // Suggest up to 3 swaps where field player has significantly more time
-    for (let i = 0; i < Math.min(3, fieldSorted.length, benchSorted.length); i++) {
-      const fieldPlayer = fieldSorted[i];
-      const benchPlayer = benchSorted[i];
-      const diff = (fieldPlayer.seconds || 0) - (benchPlayer.seconds || 0);
+    // Calculate max suggestions based on available players and user preference
+    const maxSuggestions = Math.min(maxSubSuggestions, fieldSorted.length, benchSorted.length);
+    
+    // First pass: Position-based matching for players with significant time difference
+    for (const fieldPlayer of fieldSorted) {
+      if (subs.length >= maxSuggestions) break;
+      if (usedFieldPlayers.has(fieldPlayer.id)) continue;
       
-      if (diff > 60) {
-        // Only suggest if >1 minute difference
-        subs.push({ off: fieldPlayer, on: benchPlayer, diff });
+      const fieldPositions = fieldPlayer.positions || [];
+      
+      // Find best matching bench player who hasn't been used
+      const matchingBenchPlayer = benchSorted.find(benchPlayer => {
+        if (usedBenchPlayers.has(benchPlayer.id)) return false;
+        
+        const benchPositions = benchPlayer.positions || [];
+        const timeDiff = (fieldPlayer.seconds || 0) - (benchPlayer.seconds || 0);
+        
+        // Check position compatibility
+        const hasMatchingPosition = fieldPositions.length === 0 || 
+                                   benchPositions.length === 0 ||
+                                   fieldPositions.some(pos => benchPositions.includes(pos));
+        
+        return hasMatchingPosition && timeDiff > 60;
+      });
+      
+      if (matchingBenchPlayer) {
+        const diff = (fieldPlayer.seconds || 0) - (matchingBenchPlayer.seconds || 0);
+        subs.push({ off: fieldPlayer, on: matchingBenchPlayer, diff });
+        usedFieldPlayers.add(fieldPlayer.id);
+        usedBenchPlayers.add(matchingBenchPlayer.id);
+      }
+    }
+    
+    // Second pass: Time-based matching for remaining slots
+    if (subs.length < maxSuggestions) {
+      for (const fieldPlayer of fieldSorted) {
+        if (subs.length >= maxSuggestions) break;
+        if (usedFieldPlayers.has(fieldPlayer.id)) continue;
+        
+        // Find any bench player with significant time difference
+        const benchPlayer = benchSorted.find(bp => {
+          if (usedBenchPlayers.has(bp.id)) return false;
+          const timeDiff = (fieldPlayer.seconds || 0) - (bp.seconds || 0);
+          return timeDiff > 60;
+        });
+        
+        if (benchPlayer) {
+          const diff = (fieldPlayer.seconds || 0) - (benchPlayer.seconds || 0);
+          subs.push({ off: fieldPlayer, on: benchPlayer, diff });
+          usedFieldPlayers.add(fieldPlayer.id);
+          usedBenchPlayers.add(benchPlayer.id);
+        }
       }
     }
     
@@ -413,6 +501,8 @@ function App() {
         setOnFieldTarget={setOnFieldTarget}
         halfMinutes={halfMinutes}
         setHalfMinutes={setHalfMinutes}
+        maxSubSuggestions={maxSubSuggestions}
+        setMaxSubSuggestions={setMaxSubSuggestions}
         customStats={customStats}
         onToggleStatEnabled={toggleStatEnabled}
         onAddCustomStat={addCustomStat}
@@ -427,7 +517,9 @@ function App() {
         players={players}
         onAddPlayer={addPlayer}
         onAddMultiplePlayers={addMultiplePlayers}
+        onAddMultiplePlayersWithPositions={addMultiplePlayersWithPositions}
         onRemovePlayer={removePlayer}
+        onPositionToggle={togglePosition}
       />
 
       <ReportModal
@@ -445,6 +537,7 @@ function App() {
         onClose={() => setSelectedPlayer(null)}
         enabledStats={enabledStats}
         onStatUpdate={updateStat}
+        onPositionToggle={togglePosition}
       />
     </div>
   );
