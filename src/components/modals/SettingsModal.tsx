@@ -8,6 +8,8 @@ interface SettingsModalProps {
   setOnFieldTarget: (value: number) => void;
   halfMinutes: number;
   setHalfMinutes: (value: number) => void;
+  maxSubSuggestions: number;
+  setMaxSubSuggestions: (value: number) => void;
   customStats: CustomStat[];
   onToggleStatEnabled: (statId: string) => void;
   onAddCustomStat: (name: string, icon: string) => void;
@@ -23,6 +25,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   setOnFieldTarget,
   halfMinutes,
   setHalfMinutes,
+  maxSubSuggestions,
+  setMaxSubSuggestions,
   customStats,
   onToggleStatEnabled,
   onAddCustomStat,
@@ -76,6 +80,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               className="w-full px-3 py-2 bg-slate-900 rounded"
               min="1"
               max="90"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm opacity-70 mb-1">Max Substitution Suggestions</label>
+            <input
+              type="number"
+              value={maxSubSuggestions}
+              onChange={(e) => setMaxSubSuggestions(Math.max(1, Math.min(10, parseInt(e.target.value) || 5)))}
+              className="w-full px-3 py-2 bg-slate-900 rounded"
+              min="1"
+              max="10"
             />
           </div>
           
