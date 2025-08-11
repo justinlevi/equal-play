@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { SubstitutionSuggestion } from '../types/index';
 import { formatTime } from '../utils/time';
 
@@ -11,12 +11,30 @@ export const SubstitutionSuggestions: React.FC<SubstitutionSuggestionsProps> = (
   suggestions,
   onExecuteSwap,
 }) => {
+  const [isMinimized, setIsMinimized] = useState(() => {
+    const saved = localStorage.getItem('ep.suggestionsMinimized');
+    return saved === 'true';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('ep.suggestionsMinimized', isMinimized.toString());
+  }, [isMinimized]);
+
   if (suggestions.length === 0) return null;
 
   return (
     <div className="bg-yellow-900/20 border border-yellow-600 rounded-lg p-4 mb-6">
-      <h3 className="text-yellow-400 font-bold mb-3">⚡ Suggested Substitutions</h3>
-      <div className="space-y-2">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-yellow-400 font-bold">⚡ Suggested Substitutions</h3>
+        <button
+          onClick={() => setIsMinimized(!isMinimized)}
+          className="text-yellow-400 hover:text-yellow-300 text-sm"
+        >
+          {isMinimized ? '▼ Show' : '▲ Hide'}
+        </button>
+      </div>
+      {!isMinimized && (
+        <div className="space-y-2">
         {suggestions.map((sub, idx) => (
           <div key={idx} className="flex items-center justify-between bg-slate-800 rounded p-2">
             <div className="text-sm">
@@ -36,6 +54,7 @@ export const SubstitutionSuggestions: React.FC<SubstitutionSuggestionsProps> = (
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 };
