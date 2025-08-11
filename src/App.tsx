@@ -29,52 +29,131 @@ function App() {
   const [players, setPlayers] = useLocalStorage<Player[]>('ep.players', []);
   
   // Match State
-  const [running, setRunning] = useState(false);
+  const [running, setRunning] = useLocalStorage('ep.running', false);
   const [matchSeconds, setMatchSeconds] = useLocalStorage('ep.matchSeconds', 0);
+  const [matchStartTime, setMatchStartTime] = useLocalStorage<number | null>('ep.matchStartTime', null);
   
   // UI State
   const [showSettings, setShowSettings] = useState(false);
   const [showRoster, setShowRoster] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+  const [onFieldSortOrder, setOnFieldSortOrder] = useLocalStorage<'asc' | 'desc' | 'none'>('ep.onFieldSort', 'none');
+  const [benchSortOrder, setBenchSortOrder] = useLocalStorage<'asc' | 'desc' | 'none'>('ep.benchSort', 'none');
   
   const tickRef = useRef<number | null>(null);
 
   // Derived values
-  const onFieldPlayers = players.filter(p => p.on);
-  const benchPlayers = players.filter(p => !p.on);
+  const onFieldPlayersUnsorted = players.filter(p => p.on);
+  const benchPlayersUnsorted = players.filter(p => !p.on);
+  
+  // Apply sorting if needed
+  const onFieldPlayers = useMemo(() => {
+    if (onFieldSortOrder === 'none') return onFieldPlayersUnsorted;
+    return [...onFieldPlayersUnsorted].sort((a, b) => {
+      const comparison = a.name.localeCompare(b.name);
+      return onFieldSortOrder === 'asc' ? comparison : -comparison;
+    });
+  }, [onFieldPlayersUnsorted, onFieldSortOrder]);
+  
+  const benchPlayers = useMemo(() => {
+    if (benchSortOrder === 'none') return benchPlayersUnsorted;
+    return [...benchPlayersUnsorted].sort((a, b) => {
+      const comparison = a.name.localeCompare(b.name);
+      return benchSortOrder === 'asc' ? comparison : -comparison;
+    });
+  }, [benchPlayersUnsorted, benchSortOrder]);
+  
   const enabledStats = customStats.filter(s => s.enabled);
   const minutesStats = useMemo(() => calculateMinutesStats(players), [players]);
+
+  // Handle page refresh - restore timer state
+  useEffect(() => {
+    if (running && matchStartTime) {
+      const elapsed = Math.floor((Date.now() - matchStartTime) / 1000);
+      const storedSeconds = matchSeconds;
+      if (elapsed > storedSeconds) {
+        // Page was refreshed while timer was running
+        setMatchSeconds(elapsed);
+        // Update player seconds based on the difference
+        const diff = elapsed - storedSeconds;
+        setPlayers(prev =>
+          prev.map(p => (p.on ? { ...p, seconds: (p.seconds || 0) + diff } : p))
+        );
+      }
+    }
+  }, []); // Run only on mount
 
   // Timer effect
   useEffect(() => {
     if (running) {
+      if (!matchStartTime) {
+        // Starting timer for the first time or after a stop
+        setMatchStartTime(Date.now() - (matchSeconds * 1000));
+      }
+      
       tickRef.current = setInterval(() => {
-        setMatchSeconds(s => s + 1);
+        const elapsed = Math.floor((Date.now() - (matchStartTime || Date.now())) / 1000);
+        setMatchSeconds(elapsed);
         setPlayers(prev =>
           prev.map(p => (p.on ? { ...p, seconds: (p.seconds || 0) + 1 } : p))
         );
       }, 1000);
+    } else {
+      // Timer stopped
+      if (matchStartTime) {
+        setMatchStartTime(null);
+      }
     }
     return () => {
       if (tickRef.current) clearInterval(tickRef.current);
     };
-  }, [running, setMatchSeconds, setPlayers]);
+  }, [running, matchStartTime, setMatchSeconds, setPlayers, setMatchStartTime]);
 
   // Player management
   const addPlayer = (name: string, number = '') => {
     if (!name.trim()) return;
-    setPlayers(p => [
-      ...p,
-      {
-        id: crypto.randomUUID(),
-        name: name.trim(),
-        number: number.trim(),
-        seconds: 0,
-        on: false,
-        stats: {},
-      },
-    ]);
+    
+    // Check for duplicate names (case-insensitive)
+    const normalizedName = name.trim().toLowerCase();
+    setPlayers(p => {
+      const exists = p.some(player => player.name.toLowerCase() === normalizedName);
+      if (exists) return p; // Silently ignore duplicates
+      
+      return [
+        ...p,
+        {
+          id: crypto.randomUUID(),
+          name: name.trim(),
+          number: number.trim(),
+          seconds: 0,
+          on: false,
+          stats: {},
+        },
+      ];
+    });
+  };
+
+  const addMultiplePlayers = (names: string[]) => {
+    setPlayers(p => {
+      // Get existing player names (normalized)
+      const existingNames = new Set(p.map(player => player.name.toLowerCase()));
+      
+      // Filter out duplicates and create new players
+      const newPlayers = names
+        .filter(name => name.trim())
+        .filter(name => !existingNames.has(name.trim().toLowerCase())) // Skip duplicates
+        .map(name => ({
+          id: crypto.randomUUID(),
+          name: name.trim(),
+          number: '',
+          seconds: 0,
+          on: false,
+          stats: {},
+        }));
+      
+      return [...p, ...newPlayers];
+    });
   };
 
   const removePlayer = (id: string) => {
@@ -153,6 +232,8 @@ function App() {
     if (window.confirm('Reset all player minutes to 00:00?')) {
       setPlayers(p => p.map(x => ({ ...x, seconds: 0 })));
       setMatchSeconds(0);
+      setMatchStartTime(null);
+      setRunning(false);
     }
   };
 
@@ -224,12 +305,28 @@ function App() {
               ⚽ On Field ({onFieldPlayers.length}/{onFieldTarget})
             </h2>
             {onFieldPlayers.length > 0 && (
-              <button
-                onClick={benchAll}
-                className="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-sm"
-              >
-                Bench All
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    if (onFieldSortOrder === 'none') setOnFieldSortOrder('asc');
+                    else if (onFieldSortOrder === 'asc') setOnFieldSortOrder('desc');
+                    else setOnFieldSortOrder('none');
+                  }}
+                  className="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-sm flex items-center gap-1"
+                  title={onFieldSortOrder === 'none' ? 'Sort A-Z' : onFieldSortOrder === 'asc' ? 'Sort Z-A' : 'Clear sort'}
+                >
+                  <span>Name</span>
+                  {onFieldSortOrder === 'asc' && <span>↓</span>}
+                  {onFieldSortOrder === 'desc' && <span>↑</span>}
+                  {onFieldSortOrder === 'none' && <span className="opacity-50">⇅</span>}
+                </button>
+                <button
+                  onClick={benchAll}
+                  className="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-sm"
+                >
+                  Bench All
+                </button>
+              </div>
             )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -248,9 +345,27 @@ function App() {
 
         {/* Bench Section */}
         <section>
-          <h2 className="text-lg font-bold text-slate-400 mb-4">
-            🪑 Bench ({benchPlayers.length})
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-slate-400">
+              🪑 Bench ({benchPlayers.length})
+            </h2>
+            {benchPlayers.length > 0 && (
+              <button
+                onClick={() => {
+                  if (benchSortOrder === 'none') setBenchSortOrder('asc');
+                  else if (benchSortOrder === 'asc') setBenchSortOrder('desc');
+                  else setBenchSortOrder('none');
+                }}
+                className="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-sm flex items-center gap-1"
+                title={benchSortOrder === 'none' ? 'Sort A-Z' : benchSortOrder === 'asc' ? 'Sort Z-A' : 'Clear sort'}
+              >
+                <span>Name</span>
+                {benchSortOrder === 'asc' && <span>↓</span>}
+                {benchSortOrder === 'desc' && <span>↑</span>}
+                {benchSortOrder === 'none' && <span className="opacity-50">⇅</span>}
+              </button>
+            )}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {benchPlayers.map(player => (
               <PlayerCard
@@ -311,6 +426,7 @@ function App() {
         onClose={() => setShowRoster(false)}
         players={players}
         onAddPlayer={addPlayer}
+        onAddMultiplePlayers={addMultiplePlayers}
         onRemovePlayer={removePlayer}
       />
 
@@ -324,7 +440,7 @@ function App() {
       />
 
       <PlayerDetailsModal
-        player={selectedPlayer}
+        player={selectedPlayer ? players.find(p => p.id === selectedPlayer.id) || null : null}
         isOpen={!!selectedPlayer}
         onClose={() => setSelectedPlayer(null)}
         enabledStats={enabledStats}
