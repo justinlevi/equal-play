@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Player } from '../../types/index';
+import { Player, Position } from '../../types/index';
+import { POSITION_CONFIG, ALL_POSITIONS } from '../../utils/positions';
 
 interface RosterModalProps {
   isOpen: boolean;
@@ -7,7 +8,9 @@ interface RosterModalProps {
   players: Player[];
   onAddPlayer: (name: string, number: string) => void;
   onAddMultiplePlayers?: (names: string[]) => void;
+  onAddMultiplePlayersWithPositions?: (playersData: Array<{name: string; positions?: Position[]}>) => void;
   onRemovePlayer: (id: string) => void;
+  onPositionToggle: (playerId: string, position: Position) => void;
 }
 
 export const RosterModal: React.FC<RosterModalProps> = ({
@@ -16,7 +19,9 @@ export const RosterModal: React.FC<RosterModalProps> = ({
   players,
   onAddPlayer,
   onAddMultiplePlayers,
+  onAddMultiplePlayersWithPositions,
   onRemovePlayer,
+  onPositionToggle,
 }) => {
   const [newName, setNewName] = useState('');
   const [newNumber, setNewNumber] = useState('');
@@ -41,25 +46,73 @@ export const RosterModal: React.FC<RosterModalProps> = ({
   };
 
   const handleBulkAdd = () => {
-    // Split by newlines or commas, trim each name, and filter out empty strings
-    const names = bulkNames
-      .split(/[\n,]+/)
-      .map(name => name.trim())
-      .filter(name => name.length > 0);
+    // Parse each line for name and optional positions (one player per line)
+    const lines = bulkNames.split('\n').filter(line => line.trim());
+    const playersData: Array<{name: string; positions?: Position[]}> = [];
     
-    // Use bulk add function if available, otherwise fall back to individual adds
-    if (onAddMultiplePlayers) {
-      onAddMultiplePlayers(names);
-    } else {
-      // Fallback - shouldn't be used but kept for safety
-      names.forEach(name => {
-        onAddPlayer(name, '');
-      });
+    for (const line of lines) {
+      // Check if line contains positions (format: "Name, POS1, POS2")
+      const parts = line.split(',').map(p => p.trim()).filter(p => p);
+      if (parts.length === 0) continue;
+      
+      const name = parts[0];
+      const positions: Position[] = [];
+      
+      // Check remaining parts for valid positions
+      for (let i = 1; i < parts.length; i++) {
+        const upperPart = parts[i].toUpperCase();
+        if (ALL_POSITIONS.includes(upperPart as Position)) {
+          positions.push(upperPart as Position);
+        }
+      }
+      
+      playersData.push({ name, positions: positions.length > 0 ? positions : undefined });
+    }
+    
+    // Use the new function if available
+    if (onAddMultiplePlayersWithPositions) {
+      onAddMultiplePlayersWithPositions(playersData);
+    } else if (onAddMultiplePlayers) {
+      // Fallback to just names
+      onAddMultiplePlayers(playersData.map(p => p.name));
     }
     
     // Clear the bulk input
     setBulkNames('');
     setBulkMode(false);
+  };
+  
+  // Helper function to count valid players in bulk input
+  const getBulkPlayerCount = () => {
+    return bulkNames
+      .split('\n')
+      .filter(line => {
+        const trimmed = line.trim();
+        if (!trimmed) return false;
+        // Get just the name part (before any comma)
+        const namePart = trimmed.split(',')[0].trim();
+        return namePart.length > 0;
+      }).length;
+  };
+
+  const handleExport = () => {
+    const exportText = sortedPlayers.map(player => {
+      const positions = player.positions?.join(', ') || '';
+      return positions ? `${player.name}, ${positions}` : player.name;
+    }).join('\n');
+    
+    navigator.clipboard.writeText(exportText).then(() => {
+      alert('Roster copied to clipboard!');
+    }).catch(() => {
+      // Fallback for browsers that don't support clipboard API
+      const textArea = document.createElement('textarea');
+      textArea.value = exportText;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      alert('Roster copied to clipboard!');
+    });
   };
 
   return (
@@ -129,10 +182,10 @@ export const RosterModal: React.FC<RosterModalProps> = ({
             /* Bulk player input */
             <div className="space-y-2 mb-4">
               <textarea
-                placeholder="Enter player names (one per line or comma-separated)&#10;&#10;Example:&#10;John Smith&#10;Sarah Johnson, Mike Wilson&#10;Emma Davis"
+                placeholder="Enter one player per line with optional positions&#10;&#10;Format:&#10;Name, Position1, Position2&#10;&#10;Examples:&#10;John Smith, GK&#10;Sarah Johnson, DEF, MID&#10;Emma Davis&#10;Mike Wilson, FWD"
                 value={bulkNames}
                 onChange={(e) => setBulkNames(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-900 rounded h-32 resize-none"
+                className="w-full px-3 py-2 bg-slate-900 rounded h-32 resize-none font-mono text-sm"
               />
               <div className="flex gap-2">
                 <button
@@ -140,7 +193,7 @@ export const RosterModal: React.FC<RosterModalProps> = ({
                   disabled={!bulkNames.trim()}
                   className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-slate-700 disabled:opacity-50 rounded font-bold"
                 >
-                  Add All Players ({bulkNames.split(/[\n,]+/).filter(n => n.trim()).length})
+                  Add All Players ({getBulkPlayerCount()})
                 </button>
                 <button
                   onClick={() => setBulkNames('')}
@@ -157,32 +210,77 @@ export const RosterModal: React.FC<RosterModalProps> = ({
             <span className="text-sm text-slate-400">
               {players.length} {players.length === 1 ? 'Player' : 'Players'}
             </span>
-            <button
-              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-              className="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-sm flex items-center gap-2"
-              title={sortOrder === 'asc' ? 'Sort Z-A' : 'Sort A-Z'}
-            >
-              <span>Name</span>
-              <span>{sortOrder === 'asc' ? '↓' : '↑'}</span>
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={handleExport}
+                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm"
+                disabled={players.length === 0}
+              >
+                Export
+              </button>
+              <button
+                onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                className="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-sm flex items-center gap-2"
+                title={sortOrder === 'asc' ? 'Sort Z-A' : 'Sort A-Z'}
+              >
+                <span>Name</span>
+                <span>{sortOrder === 'asc' ? '↓' : '↑'}</span>
+              </button>
+            </div>
           </div>
           
           <div className="space-y-2">
             {sortedPlayers.map((player) => (
               <div
                 key={player.id}
-                className="flex items-center justify-between bg-slate-900 rounded p-3"
+                className="bg-slate-900 rounded p-3 space-y-2"
               >
-                <span>
-                  {player.number && `#${player.number} `}
-                  {player.name}
-                </span>
-                <button
-                  onClick={() => onRemovePlayer(player.id)}
-                  className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-sm"
-                >
-                  Remove
-                </button>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span>
+                      {player.number && `#${player.number} `}
+                      {player.name}
+                    </span>
+                    {player.positions && player.positions.length > 0 && (
+                      <div className="flex gap-1">
+                        {player.positions.map(pos => (
+                          <span
+                            key={pos}
+                            className={`text-xs px-1.5 py-0.5 rounded ${POSITION_CONFIG[pos].bgColor} ${POSITION_CONFIG[pos].color}`}
+                          >
+                            {POSITION_CONFIG[pos].label}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => onRemovePlayer(player.id)}
+                    className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-sm"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <div className="flex gap-1">
+                  {ALL_POSITIONS.map(position => {
+                    const config = POSITION_CONFIG[position];
+                    const isSelected = player.positions?.includes(position);
+                    return (
+                      <button
+                        key={position}
+                        onClick={() => onPositionToggle(player.id, position)}
+                        className={`px-2 py-0.5 rounded text-xs transition-all ${
+                          isSelected 
+                            ? `${config.bgColor} ${config.color}`
+                            : 'bg-slate-800 hover:bg-slate-700 text-slate-500'
+                        }`}
+                        title={config.fullName}
+                      >
+                        {config.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             ))}
           </div>
