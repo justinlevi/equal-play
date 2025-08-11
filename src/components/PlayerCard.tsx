@@ -1,6 +1,7 @@
 import React from 'react';
 import { Player, CustomStat } from '../types';
 import { formatTime } from '../utils/time';
+import { POSITION_CONFIG } from '../utils/positions';
 
 interface PlayerCardProps {
   player: Player;
@@ -28,10 +29,28 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
     >
       <div className="flex items-center justify-between mb-2">
         <div className="flex-1">
-          <span className="font-bold text-lg">
-            {player.number && `#${player.number} `}
-            {player.name}
-          </span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-bold text-lg">
+              {player.number && `#${player.number} `}
+              {player.name}
+            </span>
+            {player.positions && player.positions.length > 0 && (
+              <div className="flex gap-1">
+                {player.positions.map(pos => {
+                  const config = POSITION_CONFIG[pos];
+                  return (
+                    <span
+                      key={pos}
+                      className={`text-xs px-1.5 py-0.5 rounded ${config.bgColor} ${config.color} font-medium`}
+                      title={config.fullName}
+                    >
+                      {config.label}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
         <button
           onClick={(e) => {

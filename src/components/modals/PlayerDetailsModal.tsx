@@ -1,6 +1,7 @@
 import React from 'react';
-import { Player, CustomStat } from '../../types/index';
+import { Player, CustomStat, Position } from '../../types/index';
 import { formatTime } from '../../utils/time';
+import { POSITION_CONFIG, ALL_POSITIONS } from '../../utils/positions';
 
 interface PlayerDetailsModalProps {
   player: Player | null;
@@ -8,6 +9,7 @@ interface PlayerDetailsModalProps {
   onClose: () => void;
   enabledStats: CustomStat[];
   onStatUpdate: (playerId: string, statId: string, delta: number) => void;
+  onPositionToggle: (playerId: string, position: Position) => void;
 }
 
 export const PlayerDetailsModal: React.FC<PlayerDetailsModalProps> = ({
@@ -16,6 +18,7 @@ export const PlayerDetailsModal: React.FC<PlayerDetailsModalProps> = ({
   onClose,
   enabledStats,
   onStatUpdate,
+  onPositionToggle,
 }) => {
   if (!isOpen || !player) return null;
 
@@ -39,6 +42,31 @@ export const PlayerDetailsModal: React.FC<PlayerDetailsModalProps> = ({
             <div className="text-2xl font-mono font-bold">{formatTime(player.seconds || 0)}</div>
             <div className={`text-sm mt-1 ${player.on ? 'text-green-400' : 'text-slate-400'}`}>
               {player.on ? '🟢 On Field' : '⚪ On Bench'}
+            </div>
+          </div>
+          
+          {/* Position Selection */}
+          <div>
+            <h3 className="font-bold mb-2">Positions</h3>
+            <div className="flex flex-wrap gap-2">
+              {ALL_POSITIONS.map(position => {
+                const config = POSITION_CONFIG[position];
+                const isSelected = player.positions?.includes(position);
+                return (
+                  <button
+                    key={position}
+                    onClick={() => onPositionToggle(player.id, position)}
+                    className={`px-3 py-1 rounded transition-all ${
+                      isSelected 
+                        ? `${config.bgColor} ${config.color} ring-2 ring-offset-2 ring-offset-slate-800 ring-current`
+                        : 'bg-slate-700 hover:bg-slate-600 text-slate-400'
+                    }`}
+                    title={config.fullName}
+                  >
+                    {config.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
           

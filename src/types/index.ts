@@ -1,3 +1,5 @@
+export type Position = 'GK' | 'DEF' | 'MID' | 'FWD';
+
 export interface Player {
   id: string;
   name: string;
@@ -5,6 +7,7 @@ export interface Player {
   seconds: number;
   on: boolean;
   stats: Record<string, number>;
+  positions?: Position[];
 }
 
 export interface CustomStat {
