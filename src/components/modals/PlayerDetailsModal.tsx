@@ -20,8 +20,14 @@ export const PlayerDetailsModal: React.FC<PlayerDetailsModalProps> = ({
   if (!isOpen || !player) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-slate-800 rounded-lg p-6 max-w-md w-full">
+    <div 
+      className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-slate-800 rounded-lg p-6 max-w-md w-full"
+        onClick={(e) => e.stopPropagation()}
+      >
         <h2 className="text-xl font-bold mb-4">
           {player.number && `#${player.number} `}
           {player.name}
