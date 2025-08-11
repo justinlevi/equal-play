@@ -38,7 +38,7 @@ function App() {
   const [showReport, setShowReport] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   
-  const tickRef = useRef<NodeJS.Timeout | null>(null);
+  const tickRef = useRef<number | null>(null);
 
   // Derived values
   const onFieldPlayers = players.filter(p => p.on);
