@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SubstitutionSuggestion } from '../types/index';
 import { formatTime } from '../utils/time';
+import { POSITION_CONFIG } from '../utils/positions';
 
 interface SubstitutionSuggestionsProps {
   suggestions: SubstitutionSuggestion[];
@@ -34,23 +35,61 @@ export const SubstitutionSuggestions: React.FC<SubstitutionSuggestionsProps> = (
         </button>
       </div>
       {!isMinimized && (
-        <div className="space-y-2">
+        <div className="space-y-3">
         {suggestions.map((sub, idx) => (
-          <div key={idx} className="flex items-center justify-between bg-slate-800 rounded p-2">
-            <div className="text-sm">
-              <span className="text-red-400">↓ {sub.off.name}</span>
-              <span className="mx-2">→</span>
-              <span className="text-green-400">↑ {sub.on.name}</span>
-              <span className="ml-2 opacity-70">
-                (Δ {formatTime(sub.diff)})
-              </span>
+          <div key={idx} className="bg-slate-800 rounded-lg p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 space-y-2">
+                {/* Off player */}
+                <div className="flex items-center gap-2">
+                  <span className="text-red-400">↓</span>
+                  <span className="text-red-400 font-medium">{sub.off.name}</span>
+                  {sub.off.positions && sub.off.positions.length > 0 && (
+                    <div className="flex gap-1">
+                      {sub.off.positions.map(pos => (
+                        <span 
+                          key={pos} 
+                          className={`text-xs px-1.5 py-0.5 rounded ${POSITION_CONFIG[pos].bgColor} ${POSITION_CONFIG[pos].color}`}
+                        >
+                          {POSITION_CONFIG[pos].label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                
+                {/* On player */}
+                <div className="flex items-center gap-2">
+                  <span className="text-green-400">↑</span>
+                  <span className="text-green-400 font-medium">{sub.on.name}</span>
+                  {sub.on.positions && sub.on.positions.length > 0 && (
+                    <div className="flex gap-1">
+                      {sub.on.positions.map(pos => (
+                        <span 
+                          key={pos} 
+                          className={`text-xs px-1.5 py-0.5 rounded ${POSITION_CONFIG[pos].bgColor} ${POSITION_CONFIG[pos].color}`}
+                        >
+                          {POSITION_CONFIG[pos].label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Time difference and swap button */}
+              <div className="flex flex-col items-end gap-2">
+                <span className="text-xs opacity-70 whitespace-nowrap">
+                  Δ {formatTime(sub.diff)}
+                </span>
+                <button
+                  onClick={() => onExecuteSwap(sub.off.id, sub.on.id)}
+                  className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 rounded text-sm font-bold"
+                >
+                  SWAP
+                </button>
+              </div>
             </div>
-            <button
-              onClick={() => onExecuteSwap(sub.off.id, sub.on.id)}
-              className="px-2 py-1 bg-yellow-600 hover:bg-yellow-700 rounded text-xs font-bold"
-            >
-              SWAP
-            </button>
           </div>
         ))}
       </div>
