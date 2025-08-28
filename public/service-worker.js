@@ -1,4 +1,4 @@
-const CACHE_NAME = 'equal-play-v1';
+const CACHE_NAME = 'equal-play-v2';
 const BASE_PATH = '/equal-play';
 const urlsToCache = [
   BASE_PATH + '/',
@@ -21,29 +21,48 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(event.request)
       .then(response => {
-        // Cache hit - return response
+        // Always try to fetch from network first for HTML files to get updates
+        if (event.request.destination === 'document' || event.request.url.endsWith('.html')) {
+          return fetch(event.request).then(networkResponse => {
+            if (networkResponse && networkResponse.status === 200) {
+              // Update cache with new content
+              const responseToCache = networkResponse.clone();
+              caches.open(CACHE_NAME).then(cache => {
+                cache.put(event.request, responseToCache);
+              });
+              return networkResponse;
+            }
+            // If network fails, fallback to cache
+            return response;
+          }).catch(() => {
+            // Network failed, return cached version if available
+            return response;
+          });
+        }
+
+        // For other resources, return cached version if available
         if (response) {
           return response;
         }
 
-        // Clone the request
+        // Clone the request for network fetch
         const fetchRequest = event.request.clone();
 
-        return fetch(fetchRequest).then(response => {
+        return fetch(fetchRequest).then(networkResponse => {
           // Check if we received a valid response
-          if (!response || response.status !== 200 || response.type !== 'basic') {
-            return response;
+          if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
+            return networkResponse;
           }
 
-          // Clone the response
-          const responseToCache = response.clone();
+          // Clone the response for caching
+          const responseToCache = networkResponse.clone();
 
           caches.open(CACHE_NAME)
             .then(cache => {
               cache.put(event.request, responseToCache);
             });
 
-          return response;
+          return networkResponse;
         });
       })
   );
