@@ -26,6 +26,12 @@ function App() {
   const [customStats, setCustomStats] = useLocalStorage('ep.customStats', DEFAULT_CUSTOM_STATS);
   const [maxSubSuggestions, setMaxSubSuggestions] = useLocalStorage('ep.maxSubSuggestions', 5);
   
+  // Game Score
+  const [homeScore, setHomeScore] = useLocalStorage('ep.homeScore', 0);
+  const [awayScore, setAwayScore] = useLocalStorage('ep.awayScore', 0);
+  const [homeTeamName, setHomeTeamName] = useLocalStorage('ep.homeTeamName', 'Home');
+  const [awayTeamName, setAwayTeamName] = useLocalStorage('ep.awayTeamName', 'Away');
+  
   // Players
   const [players, setPlayers] = useLocalStorage<Player[]>('ep.players', []);
   
@@ -269,6 +275,12 @@ function App() {
     setCustomStats(stats => stats.filter(s => s.id !== statId));
   };
 
+  // Score management
+  const incrementHomeScore = () => setHomeScore(prev => prev + 1);
+  const decrementHomeScore = () => setHomeScore(prev => Math.max(0, prev - 1));
+  const incrementAwayScore = () => setAwayScore(prev => prev + 1);
+  const decrementAwayScore = () => setAwayScore(prev => Math.max(0, prev - 1));
+
   // Reset functions
   const resetMinutes = () => {
     if (window.confirm('Reset all player minutes to 00:00?')) {
@@ -378,6 +390,14 @@ function App() {
         onToggleRunning={() => setRunning(!running)}
         onShowSettings={() => setShowSettings(true)}
         onShowRoster={() => setShowRoster(true)}
+        homeScore={homeScore}
+        awayScore={awayScore}
+        homeTeamName={homeTeamName}
+        awayTeamName={awayTeamName}
+        onIncrementHomeScore={incrementHomeScore}
+        onDecrementHomeScore={decrementHomeScore}
+        onIncrementAwayScore={incrementAwayScore}
+        onDecrementAwayScore={decrementAwayScore}
       />
 
       <main className="max-w-7xl mx-auto p-4">
@@ -503,6 +523,10 @@ function App() {
         setHalfMinutes={setHalfMinutes}
         maxSubSuggestions={maxSubSuggestions}
         setMaxSubSuggestions={setMaxSubSuggestions}
+        homeTeamName={homeTeamName}
+        setHomeTeamName={setHomeTeamName}
+        awayTeamName={awayTeamName}
+        setAwayTeamName={setAwayTeamName}
         customStats={customStats}
         onToggleStatEnabled={toggleStatEnabled}
         onAddCustomStat={addCustomStat}

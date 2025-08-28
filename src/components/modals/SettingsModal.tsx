@@ -10,6 +10,10 @@ interface SettingsModalProps {
   setHalfMinutes: (value: number) => void;
   maxSubSuggestions: number;
   setMaxSubSuggestions: (value: number) => void;
+  homeTeamName: string;
+  setHomeTeamName: (value: string) => void;
+  awayTeamName: string;
+  setAwayTeamName: (value: string) => void;
   customStats: CustomStat[];
   onToggleStatEnabled: (statId: string) => void;
   onAddCustomStat: (name: string, icon: string) => void;
@@ -27,6 +31,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   setHalfMinutes,
   maxSubSuggestions,
   setMaxSubSuggestions,
+  homeTeamName,
+  setHomeTeamName,
+  awayTeamName,
+  setAwayTeamName,
   customStats,
   onToggleStatEnabled,
   onAddCustomStat,
@@ -92,6 +100,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               className="w-full px-3 py-2 bg-slate-900 rounded"
               min="1"
               max="10"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm opacity-70 mb-1">Home Team Name</label>
+            <input
+              type="text"
+              value={homeTeamName}
+              onChange={(e) => setHomeTeamName(e.target.value)}
+              onBlur={(e) => setHomeTeamName(e.target.value.trim() || 'Home')}
+              className="w-full px-3 py-2 bg-slate-900 rounded"
+              placeholder="Home"
+              maxLength={20}
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm opacity-70 mb-1">Away Team Name</label>
+            <input
+              type="text"
+              value={awayTeamName}
+              onChange={(e) => setAwayTeamName(e.target.value)}
+              onBlur={(e) => setAwayTeamName(e.target.value.trim() || 'Away')}
+              className="w-full px-3 py-2 bg-slate-900 rounded"
+              placeholder="Away"
+              maxLength={20}
             />
           </div>
           
