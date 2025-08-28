@@ -30,3 +30,10 @@ export interface MinutesStats {
   max: number;
   min: number;
 }
+
+export interface StagedSubstitution {
+  id: string;
+  offPlayer: Player;
+  onPlayer: Player;
+  timestamp: number;
+}

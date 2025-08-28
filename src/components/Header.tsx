@@ -9,6 +9,8 @@ interface HeaderProps {
   onToggleRunning: () => void;
   onShowSettings: () => void;
   onShowRoster: () => void;
+  onShowSubStaging: () => void;
+  stagedSubsCount: number;
   homeScore: number;
   awayScore: number;
   homeTeamName: string;
@@ -27,6 +29,8 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleRunning,
   onShowSettings,
   onShowRoster,
+  onShowSubStaging,
+  stagedSubsCount,
   homeScore,
   awayScore,
   homeTeamName,
@@ -107,6 +111,18 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
           
           <div className="flex items-center gap-2">
+            <button
+              onClick={onShowSubStaging}
+              className="p-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 transition-colors relative"
+              title="Stage Substitutions"
+            >
+              📋
+              {stagedSubsCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-yellow-500 text-black text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                  {stagedSubsCount}
+                </span>
+              )}
+            </button>
             <button
               onClick={onShowSettings}
               className="p-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 transition-colors"

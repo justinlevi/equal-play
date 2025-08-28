@@ -6,8 +6,10 @@ import { SettingsModal } from './components/modals/SettingsModal';
 import { RosterModal } from './components/modals/RosterModal';
 import { ReportModal } from './components/modals/ReportModal';
 import { PlayerDetailsModal } from './components/modals/PlayerDetailsModal';
-import { Player, CustomStat, SubstitutionSuggestion, Position } from './types/index';
+import { SubstitutionStagingModal } from './components/modals/SubstitutionStagingModal';
+import { Player, CustomStat, SubstitutionSuggestion, Position, StagedSubstitution } from './types/index';
 import { calculateMinutesStats } from './utils/stats';
+import { formatTime } from './utils/time';
 import { useLocalStorage } from './hooks/useLocalStorage';
 
 const DEFAULT_CUSTOM_STATS: CustomStat[] = [
@@ -40,10 +42,14 @@ function App() {
   const [matchSeconds, setMatchSeconds] = useLocalStorage('ep.matchSeconds', 0);
   const [matchStartTime, setMatchStartTime] = useLocalStorage<number | null>('ep.matchStartTime', null);
   
+  // Staging
+  const [stagedSubs, setStagedSubs] = useLocalStorage<StagedSubstitution[]>('ep.stagedSubs', []);
+  
   // UI State
   const [showSettings, setShowSettings] = useState(false);
   const [showRoster, setShowRoster] = useState(false);
   const [showReport, setShowReport] = useState(false);
+  const [showSubStaging, setShowSubStaging] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [onFieldSortOrder, setOnFieldSortOrder] = useLocalStorage<'asc' | 'desc' | 'none'>('ep.onFieldSort', 'none');
   const [benchSortOrder, setBenchSortOrder] = useLocalStorage<'asc' | 'desc' | 'none'>('ep.benchSort', 'none');
@@ -281,6 +287,42 @@ function App() {
   const incrementAwayScore = () => setAwayScore(prev => prev + 1);
   const decrementAwayScore = () => setAwayScore(prev => Math.max(0, prev - 1));
 
+  // Staging management
+  const addStagedSubstitution = (offPlayer: Player, onPlayer: Player) => {
+    const newSub: StagedSubstitution = {
+      id: crypto.randomUUID(),
+      offPlayer,
+      onPlayer,
+      timestamp: Date.now(),
+    };
+    setStagedSubs(prev => [...prev, newSub]);
+  };
+
+  const removeStagedSubstitution = (id: string) => {
+    setStagedSubs(prev => prev.filter(sub => sub.id !== id));
+  };
+
+  const clearAllStagedSubs = () => {
+    setStagedSubs([]);
+  };
+
+  const executeAllStagedSubs = () => {
+    if (stagedSubs.length === 0) return;
+    
+    setPlayers(p =>
+      p.map(player => {
+        const stagingOff = stagedSubs.find(sub => sub.offPlayer.id === player.id);
+        const stagingOn = stagedSubs.find(sub => sub.onPlayer.id === player.id);
+        
+        if (stagingOff) return { ...player, on: false };
+        if (stagingOn) return { ...player, on: true };
+        return player;
+      })
+    );
+    
+    clearAllStagedSubs();
+  };
+
   // Reset functions
   const resetMinutes = () => {
     if (window.confirm('Reset all player minutes to 00:00?')) {
@@ -390,6 +432,8 @@ function App() {
         onToggleRunning={() => setRunning(!running)}
         onShowSettings={() => setShowSettings(true)}
         onShowRoster={() => setShowRoster(true)}
+        onShowSubStaging={() => setShowSubStaging(true)}
+        stagedSubsCount={stagedSubs.length}
         homeScore={homeScore}
         awayScore={awayScore}
         homeTeamName={homeTeamName}
@@ -401,6 +445,55 @@ function App() {
       />
 
       <main className="max-w-7xl mx-auto p-4">
+        {/* Staged Substitutions Execution */}
+        {stagedSubs.length > 0 && (
+          <div className="bg-yellow-900/20 border border-yellow-600 rounded-lg p-4 mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-yellow-400 font-bold">⚡ Ready to Execute</h3>
+              <button
+                onClick={clearAllStagedSubs}
+                className="text-yellow-400 hover:text-yellow-300 text-sm"
+              >
+                Clear All
+              </button>
+            </div>
+            <div className="space-y-2 mb-4">
+              {stagedSubs.map((sub) => (
+                <div key={sub.id} className="bg-slate-800 rounded-lg p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-red-400">↓ {sub.offPlayer.name}</span>
+                        <span className="text-xs text-slate-400">
+                          ({formatTime(sub.offPlayer.seconds || 0)})
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-green-400">↑ {sub.onPlayer.name}</span>
+                        <span className="text-xs text-slate-400">
+                          ({formatTime(sub.onPlayer.seconds || 0)})
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => removeStagedSubstitution(sub.id)}
+                      className="text-red-400 hover:text-red-300 font-bold"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={executeAllStagedSubs}
+              className="w-full px-6 py-4 bg-yellow-600 hover:bg-yellow-700 rounded-lg font-bold text-xl text-black transition-colors"
+            >
+              ⚡ Execute {stagedSubs.length} Staged Substitution{stagedSubs.length !== 1 ? 's' : ''}
+            </button>
+          </div>
+        )}
+
         <SubstitutionSuggestions
           suggestions={suggestedSubs}
           onExecuteSwap={executeSwap}
@@ -562,6 +655,16 @@ function App() {
         enabledStats={enabledStats}
         onStatUpdate={updateStat}
         onPositionToggle={togglePosition}
+      />
+
+      <SubstitutionStagingModal
+        isOpen={showSubStaging}
+        onClose={() => setShowSubStaging(false)}
+        players={players}
+        stagedSubs={stagedSubs}
+        onAddStagedSub={addStagedSubstitution}
+        onRemoveStagedSub={removeStagedSubstitution}
+        onClearAll={clearAllStagedSubs}
       />
     </div>
   );
